@@ -4,6 +4,7 @@
 from dataclasses import dataclass
 from collections import defaultdict
 import pytest
+from typing import List
 
 INF = 100000
 distance = defaultdict(dict)
@@ -16,8 +17,14 @@ class TimeWindow:
 
 
 @dataclass
+class Ends:
+    first: int
+    second: int
+
+
+@dataclass
 class Task:
-    demand: int
+    endpoint: Ends
     cost: int
     time_window: TimeWindow
 
@@ -31,74 +38,105 @@ def get_distance(i_, j_):
         return INF
 
 
-def tour_spliting(tasks_, Q_):
-    tau = len(tasks_)
+def argmin(sequence: List):
+    index, val = -1, INF
+    for i in range(len(sequence)):
+        if sequence[i] < INF:
+            index, val = i, sequence[i]
+    return index, val
 
-    W = [0] * tau
-    P = [0] * tau
-    for i in range(1, tau):
-        W[i] = INF
 
-    for i in range(1, tau):
-        j = i
-        load = 0
-        length = 0
-        DepartureTime = 0
-        u = 0
-        while True:
-            v = j
-            load += tasks_[v].demand
-            length = length - get_distance(u, 0) + get_distance(u, v) + tasks_[v].cost + get_distance(v, 0)
-            ArrivalTime = DepartureTime + get_distance(u, v)
-            DepartureTime = ArrivalTime + max(0, tasks_[v].time_window.start - ArrivalTime) + tasks_[v].cost
-            if load <= Q_ and W[i - 1] + length < W[j] and ArrivalTime <= tasks_[v].time_window.end:
-                W[j] = W[i - 1] + length
-                P[j] = i - 1
+def vertibe(tasks_):
+    W, P, ArriveTime = [], [], []
+    for _ in range(len(tasks_)):
+        W.append(list())
+        P.append(list())
+        ArriveTime.append(list())
 
-            j += 1
-            u = v
-            if j >= tau or load > Q_ or ArrivalTime > tasks_[u].time_window.end:
-                break
+    W[0].append(0)
+    P[0].append(0)
+    ArriveTime[0].append(0)
 
+    for i in range(1, len(tasks_)):
+        for j in range(len(tasks_[i])):
+            distance_ = []
+            ArriveTime_ = []
+            for k in range(len(W[i - 1])):
+                if W[i - 1][k] == INF or ArriveTime[i - 1][k] == INF or ArriveTime[i - 1][k] + tasks_[i - 1][
+                    k].cost + get_distance(
+                        tasks_[i - 1][k].endpoint.second, tasks_[i][j].endpoint.first) > tasks_[i][j].time_window.end:
+                    distance_.append(INF)
+                    ArriveTime_.append(INF)
+                else:
+                    distance_.append(
+                        W[i - 1][k] + tasks_[i - 1][k].cost + get_distance(tasks_[i - 1][k].endpoint.second,
+                                                                           tasks_[i][j].endpoint.first))
+                    ArriveTime_.append(max(tasks_[i][j].time_window.start,
+                                           ArriveTime[i - 1][k] + tasks_[i - 1][
+                    k].cost+ get_distance(tasks_[i - 1][k].endpoint.second, tasks_[i][j].endpoint.first)))
+
+            idx, val = argmin(distance_)
+
+            P[i].append(idx)
+            W[i].append(val)
+            if idx == -1:
+                ArriveTime[i].append(INF)
+            else:
+                ArriveTime[i].append(ArriveTime_[idx])
+
+    if len(W) == 1 or len(W[-1]) == 0:
+        W, P = [], []
     return W, P
 
 
 def test():
+    # construct demo graph based on 'vertibe.pdf'
     tasks = [
-        Task(0, 0, TimeWindow(0, 250)),
-        Task(5, 5, TimeWindow(0, 25)),
-        Task(4, 10, TimeWindow(10, 25)),
-        Task(4, 10, TimeWindow(20, 60)),
-        Task(2, 15, TimeWindow(20, 80)),
-        Task(7, 5, TimeWindow(10, 95))
+        [Task(Ends(0, 0), 0, TimeWindow(0, INF))],
+        [Task(Ends(1, 2), 5, TimeWindow(3, 5)), Task(Ends(2, 1), 5, TimeWindow(3, 5))],
+        [Task(Ends(3, 4), 4, TimeWindow(6, 10)), Task(Ends(4, 3), 4, TimeWindow(6, 10))],
+        [Task(Ends(5, 6), 3, TimeWindow(15, 16))],
+        [Task(Ends(7, 8), 4, TimeWindow(20, 28)), Task(Ends(8, 7), 4, TimeWindow(20, 28))],
+        [Task(Ends(9, 9), 2, TimeWindow(29, 35))],
+        [Task(Ends(0, 0), 0, TimeWindow(0, INF))]
     ]
 
-    distance[0][1] = 20
-    distance[0][2] = 25
-    distance[0][3] = 45
-    distance[0][4] = 25
-    distance[0][5] = 15
+    distance[0][1] = 3
+    distance[0][2] = 4
 
-    distance[1][0] = 10
-    distance[1][2] = 10
+    distance[1][3] = 3
+    distance[1][4] = 4
+    distance[2][3] = 2
+    distance[2][4] = 1
 
-    distance[2][0] = 5
-    distance[2][3] = 15
+    distance[3][5] = 1
+    distance[3][6] = 3
 
-    distance[3][0] = 30
-    distance[3][4] = 25
+    distance[6][7] = 6
+    distance[6][8] = 5
 
-    distance[4][0] = 40
-    distance[4][5] = 55
+    distance[7][9] = 3
+    distance[8][9] = 4
 
-    distance[5][0] = 5
+    distance[9][0] = 1
 
-    Q = 9
+    W, P = vertibe(tasks)
+    assert P == [[0],
+                 [0, 0],
+                 [0, 0],
+                 [1],
+                 [0, 0],
+                 [1],
+                 [0]]
 
-    W, P = tour_spliting(tasks, Q)
-    assert W == [0, 35, 75, 125, 205, 230]
-    assert P == [0, 0, 1, 1, 3, 3]
+    assert W == [[0],
+                 [3, 4],
+                 [10, 9],
+                 [14],
+                 [23, 22],
+                 [29],
+                 [32]]
 
 
 if __name__ == '__main__':
-    pytest.main()
+    pytest.main('-q main.py')
